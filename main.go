@@ -2,8 +2,13 @@ package main
 
 import (
 	"fmt"
-	"net/http"	
+	"net/http"
+	"encoding/json"
 )
+// struct to read the url json
+type Url struct {
+	Url		string		`json:"url"`
+}
 
 func main() {
 
@@ -19,6 +24,23 @@ func main() {
 		fmt.Fprintf(w, "You requested: %s\n", r.URL.Path)
 	})
 
+	http.HandleFunc("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
+		var url Url
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		err := json.NewDecoder(r.Body).Decode(&url)
+		if err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+		fmt.Fprintf(w, "Shortening endpoint")
+		fmt.Fprintf(w, "Received url: %+v\n", url)
+
+	})
+
 
 	// starting server on port 8080
 	fmt.Println("Server starting on :8080")
@@ -28,4 +50,5 @@ func main() {
 	}
 
 }
+
 
