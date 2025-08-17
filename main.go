@@ -9,6 +9,8 @@ import (
 type Url struct {
 	Url		string		`json:"url"`
 }
+var UrlMappings = make(map[string]string)
+
 
 func main() {
 
@@ -26,6 +28,7 @@ func main() {
 
 	http.HandleFunc("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
 		var url Url
+
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -35,9 +38,13 @@ func main() {
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
-		defer r.Body.Close()
-		fmt.Fprintf(w, "Shortening endpoint")
-		fmt.Fprintf(w, "Received url: %+v\n", url)
+		for i := 0; i < 1000; i++ {
+
+			shortUrl := generateUniqueCode()
+			UrlMappings[shortUrl] = url.Url
+			fmt.Println(shortUrl)
+		}
+		
 
 	})
 
@@ -49,6 +56,10 @@ func main() {
 		fmt.Printf("Server failed to start: %v\n", err)
 	}
 
+
+
 }
+
+
 
 
