@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"encoding/json"
+	"net/url"
 )
 // struct to read the url json
 type Url struct {
@@ -27,23 +28,37 @@ func main() {
 	})
 
 	http.HandleFunc("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
-		var url Url
+		var rawUrl Url
 
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		err := json.NewDecoder(r.Body).Decode(&url)
+		err := json.NewDecoder(r.Body).Decode(&rawUrl)
 		if err != nil {
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
-		for i := 0; i < 1000; i++ {
 
-			shortUrl := generateUniqueCode()
-			UrlMappings[shortUrl] = url.Url
-			fmt.Println(shortUrl)
+		parsedURL, err := url.Parse(rawUrl.Url)
+		if err != nil {
+			fmt.Println("Error parsing URL:", err)
+			return
 		}
+		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+			fmt.Println("Proper scheme not provided by URL")
+			fmt.Println("", parsedURL.Scheme)
+			return
+		}
+		if parsedURL.Host == "" || parsedURL.Host == "localhost" || parsedURL.Host == "127.0.0.1" {
+			fmt.Println("Host was either empty or not allowed")
+			return
+		}
+
+		shortUrl := generateUniqueCode()
+		UrlMappings[shortUrl] = parsedURL.String()
+
+		fmt.Println("",parsedURL.String(),shortUrl)
 		
 
 	})
