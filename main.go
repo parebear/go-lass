@@ -5,26 +5,28 @@ import (
 	"net/http"
 	"encoding/json"
 	"net/url"
+	"strings"
+	"sync"
 )
 // struct to read the url json
 type Url struct {
 	Url		string		`json:"url"`
 }
-var UrlMappings = make(map[string]string)
+
+type ShortenResponse struct {
+	ShortURL		string		`json:"short_url"`
+}
+var BASE_URL string = "http://localhost:8080"
+var (
+	UrlMappings = make(map[string]string)
+	mapMutex = &sync.RWMutex{}
+)
 
 
 func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Hello, World")
-	})
-
-	http.HandleFunc("/{code}", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		fmt.Fprintf(w, "You requested: %s\n", r.URL.Path)
 	})
 
 	http.HandleFunc("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
@@ -54,12 +56,49 @@ func main() {
 			fmt.Println("Host was either empty or not allowed")
 			return
 		}
-
-		shortUrl := generateUniqueCode()
-		UrlMappings[shortUrl] = parsedURL.String()
-
-		fmt.Println("",parsedURL.String(),shortUrl)
 		
+		shortUrl := generateUniqueCode()
+		mapMutex.Lock()
+		defer mapMutex.Unlock()
+		UrlMappings[shortUrl] = parsedURL.String()
+		
+
+		shortenedUrl := ShortenResponse{ShortURL: BASE_URL + "/" + shortUrl}
+		encoder := json.NewEncoder(w)
+		if err := encoder.Encode(shortenedUrl); err != nil {
+			fmt.Println("Error encoding JSON:", err)
+		}
+
+
+	})
+
+	http.HandleFunc("/{code}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		}
+
+		if r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/api/") {
+			 http.NotFound(w, r)
+			 return
+		}
+
+		shortCode := r.URL.Path[1:]
+		mapMutex.RLock()
+		defer mapMutex.RUnlock()
+
+
+		mapMutex.RLock()
+		defer mapMutex.RUnlock()
+		if originalURL, exists := UrlMappings[shortCode]; !exists {
+			http.NotFound(w, r)
+		} else {
+			http.Redirect(w, r, originalURL, http.StatusFound)
+			return
+		}
+
+
+
+
 
 	})
 

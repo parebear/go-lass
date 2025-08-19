@@ -21,6 +21,8 @@ func generateCode() (string, error) {
 }
 
 func isUnique(code string) bool {	
+	mapMutex.RLock()
+	defer mapMutex.RUnlock()
 	_, ok := UrlMappings[code]
 	if !ok {
 		return true
