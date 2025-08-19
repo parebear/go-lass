@@ -28,9 +28,6 @@ var (
 
 func main() {
 
-	fmt.Printf("HTML content length: %d\n", len(indexHTML))
-	fmt.Printf("First 100 chars: %.100s\n", indexHTML)
-
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Handler hit: Path=%s Method=%s\n", r.URL.Path, r.Method)
 		if r.URL.Path == "/" &&r.Method == http.MethodGet {
