@@ -8,6 +8,14 @@ import (
 	"strings"
 	"sync"
 	_ "embed"
+	"log"
+)
+var BASE_URL string = "http://localhost:8080"
+//go:embed index.html
+var indexHTML string
+var (
+	UrlMappings = make(map[string]string)
+	mapMutex = &sync.RWMutex{}
 )
 // struct to read the url json
 type ShortenRequest struct {
@@ -17,16 +25,16 @@ type ShortenRequest struct {
 type ShortenResponse struct {
 	ShortURL		string		`json:"short_url"`
 }
-var BASE_URL string = "http://localhost:8080"
-//go:embed index.html
-var indexHTML string
-var (
-	UrlMappings = make(map[string]string)
-	mapMutex = &sync.RWMutex{}
-)
 
+
+func init() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+	log.Println("Init running...")
+}
 
 func main() {
+
+	log.Println("Main running...")
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Handler hit: Path=%s Method=%s\n", r.URL.Path, r.Method)
@@ -42,27 +50,29 @@ func main() {
 		var rawUrl ShortenRequest
 
 		if r.Method != http.MethodPost {
+			log.Printf("ERROR: Failed to process request for %s: %v", r.URL.Path, http.StatusMethodNotAllowed)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		err := json.NewDecoder(r.Body).Decode(&rawUrl)
 		if err != nil {
+			log.Printf("ERROR: Failed to process request for %s: %v", r.URL.Path, http.StatusBadRequest)
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
 
 		parsedURL, err := url.Parse(rawUrl.Url)
 		if err != nil {
-			fmt.Println("Error parsing URL:", err)
+			log.Printf("ERROR: Failed to parse URL for %s: %v", r.URL.Path, err)
 			return
 		}
 		if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-			fmt.Println("Proper scheme not provided by URL")
-			fmt.Println("", parsedURL.Scheme)
+			log.Println("Proper scheme not provided by URL")
+			log.Println("", parsedURL.Scheme)
 			return
 		}
 		if parsedURL.Host == "" || parsedURL.Host == "localhost" || parsedURL.Host == "127.0.0.1" {
-			fmt.Println("Host was either empty or not allowed")
+			log.Printf("ERROR: Host was either empty or not allowed for %s", r.URL.Path)
 			return
 		}
 		
@@ -78,15 +88,20 @@ func main() {
 			fmt.Println("Error encoding JSON:", err)
 		}
 
+		log.Printf("[SHORTEN] URL: %s -> Code: %s", parsedURL, shortUrl)
+		
+
 
 	})
 
 	http.HandleFunc("/{code}", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			log.Printf("ERROR: Failed to process request for %s: %v", r.URL.Path, http.StatusMethodNotAllowed)
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 
 		if r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/api/") {
+			 log.Printf("ERROR: Failed to process request for %s", r.URL.Path)
 			 http.NotFound(w, r)
 			 return
 		}
@@ -99,28 +114,27 @@ func main() {
 		mapMutex.RLock()
 		defer mapMutex.RUnlock()
 		if originalURL, exists := UrlMappings[shortCode]; !exists {
+			log.Printf("ERROR: Failed to process request for %s", r.URL.Path)
 			http.NotFound(w, r)
 		} else {
+			log.Printf("[REDIRECT]: %s -> %s (success)", shortCode, originalURL)
 			http.Redirect(w, r, originalURL, http.StatusFound)
 			return
 		}
+	})
 
-
-
-
-
+	http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
+		
 	})
 
 
 	// starting server on port 8080
 	fmt.Println("Server starting on :8080")
+	log.Println("Server starting at :8080")
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		fmt.Printf("Server failed to start: %v\n", err)
 	}
-
-
-
 }
 
 
