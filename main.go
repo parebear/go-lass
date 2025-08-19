@@ -16,6 +16,11 @@ var indexHTML string
 var (
 	UrlMappings = make(map[string]string)
 	mapMutex = &sync.RWMutex{}
+
+
+	totalURLsCreated int64
+	totalRedirects int64
+	statsLock sync.RWMutex
 )
 // struct to read the url json
 type ShortenRequest struct {
@@ -37,7 +42,6 @@ func main() {
 	log.Println("Main running...")
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("Handler hit: Path=%s Method=%s\n", r.URL.Path, r.Method)
 		if r.URL.Path == "/" &&r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "text/html")
 			w.Write([]byte(indexHTML))
@@ -89,6 +93,9 @@ func main() {
 		}
 
 		log.Printf("[SHORTEN] URL: %s -> Code: %s", parsedURL, shortUrl)
+		statsLock.Lock()
+		totalURLsCreated++
+		statsLock.Unlock()
 		
 
 
@@ -118,13 +125,32 @@ func main() {
 			http.NotFound(w, r)
 		} else {
 			log.Printf("[REDIRECT]: %s -> %s (success)", shortCode, originalURL)
+			statsLock.Lock()
+			totalRedirects++
+			defer statsLock.Unlock()
 			http.Redirect(w, r, originalURL, http.StatusFound)
 			return
 		}
 	})
 
 	http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
-		
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		statsLock.RLock()
+		stats := map[string]int64{
+			"total_urls_created": totalURLsCreated,
+			"total_redirects": totalRedirects,
+			"active_urls": int64(len(UrlMappings)),
+		}
+		statsLock.RUnlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(stats)
+
+		log.Println("Stats requested")
 	})
 
 
