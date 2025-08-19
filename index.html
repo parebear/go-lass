@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Shortener</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 600px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 200;
+            margin-bottom: 3rem;
+            letter-spacing: -1px;
+        }
+        
+        .input-wrapper {
+            position: relative;
+            margin-bottom: 2rem;
+        }
+        
+        input {
+            width: 100%;
+            padding: 1.5rem 140px 1.5rem 1.5rem;
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 1.1rem;
+            transition: all 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #444;
+            background: #1a1a1a;
+        }
+        
+        input::placeholder {
+            color: #666;
+        }
+        
+        button {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 1rem 2rem;
+            background: #fff;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        button:hover:not(:disabled) {
+            transform: translateY(-50%) scale(0.98);
+            opacity: 0.9;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: wait;
+        }
+        
+        .result {
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s;
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 12px;
+            display: none;
+        }
+        
+        .result.show {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .result-label {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .url-display {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 1.1rem;
+            color: #fff;
+            word-break: break-all;
+            cursor: pointer;
+            padding: 0.5rem 0;
+            transition: color 0.2s;
+        }
+        
+        .url-display:hover {
+            color: #ccc;
+        }
+        
+        .copied {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #fff;
+            color: #000;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-weight: 500;
+            opacity: 0;
+            transition: all 0.3s;
+            pointer-events: none;
+        }
+        
+        .copied.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        
+        .error {
+            color: #ff6b6b;
+            margin-top: 1rem;
+            display: none;
+            font-size: 0.95rem;
+        }
+        
+        .error.show {
+            display: block;
+        }
+
+        @media (max-width: 640px) {
+            h1 {
+                font-size: 2rem;
+            }
+            
+            input {
+                padding: 1.2rem 120px 1.2rem 1.2rem;
+                font-size: 1rem;
+            }
+            
+            button {
+                padding: 0.8rem 1.5rem;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>shorten.</h1>
+        
+        <div class="input-wrapper">
+            <input 
+                type="url" 
+                id="urlInput" 
+                placeholder="Paste a long URL" 
+                required
+                pattern="https?://.+"
+                autocomplete="off"
+                spellcheck="false"
+            >
+            <button type="submit" id="submitBtn">Shorten</button>
+        </div>
+        
+        <div id="error" class="error"></div>
+        
+        <div id="result" class="result">
+            <div class="result-label">Your short URL</div>
+            <div class="url-display" id="shortUrl" onclick="copyToClipboard()"></div>
+        </div>
+    </div>
+
+    <div id="copied" class="copied">Copied!</div>
+
+    <script>
+        const urlInput = document.getElementById('urlInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const resultDiv = document.getElementById('result');
+        const shortUrlDiv = document.getElementById('shortUrl');
+        const errorDiv = document.getElementById('error');
+        const copiedDiv = document.getElementById('copied');
+
+        // Handle Enter key
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                shortenUrl();
+            }
+        });
+
+        submitBtn.addEventListener('click', shortenUrl);
+
+        async function shortenUrl() {
+            const url = urlInput.value.trim();
+            
+            if (!url) return;
+            
+            // URL validation
+            try {
+                new URL(url);
+            } catch {
+                showError('Please enter a valid URL');
+                return;
+            }
+            
+            errorDiv.classList.remove('show');
+            resultDiv.classList.remove('show');
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = '...';
+            
+            try {
+                const response = await fetch('/api/shorten', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to shorten URL');
+                }
+                
+                const data = await response.json();
+                
+                shortUrlDiv.textContent = data.short_url;
+                resultDiv.classList.add('show');
+                urlInput.value = '';
+                
+            } catch (error) {
+                showError('Something went wrong. Try again.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Shorten';
+            }
+        }
+
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+            setTimeout(() => {
+                errorDiv.classList.remove('show');
+            }, 3000);
+        }
+
+        function copyToClipboard() {
+            const shortUrl = shortUrlDiv.textContent;
+            
+            navigator.clipboard.writeText(shortUrl).then(() => {
+                copiedDiv.classList.add('show');
+                setTimeout(() => {
+                    copiedDiv.classList.remove('show');
+                }, 2000);
+            }).catch(() => {
+                // Fallback
+                const textArea = document.createElement('textarea');
+                textArea.value = shortUrl;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                copiedDiv.classList.add('show');
+                setTimeout(() => {
+                    copiedDiv.classList.remove('show');
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>

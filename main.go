@@ -7,9 +7,10 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	_ "embed"
 )
 // struct to read the url json
-type Url struct {
+type ShortenRequest struct {
 	Url		string		`json:"url"`
 }
 
@@ -17,6 +18,8 @@ type ShortenResponse struct {
 	ShortURL		string		`json:"short_url"`
 }
 var BASE_URL string = "http://localhost:8080"
+//go:embed index.html
+var indexHTML string
 var (
 	UrlMappings = make(map[string]string)
 	mapMutex = &sync.RWMutex{}
@@ -25,12 +28,21 @@ var (
 
 func main() {
 
+	fmt.Printf("HTML content length: %d\n", len(indexHTML))
+	fmt.Printf("First 100 chars: %.100s\n", indexHTML)
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Hello, World")
+		fmt.Printf("Handler hit: Path=%s Method=%s\n", r.URL.Path, r.Method)
+		if r.URL.Path == "/" &&r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "text/html")
+			w.Write([]byte(indexHTML))
+			return
+		}
 	})
 
+
 	http.HandleFunc("/api/shorten", func(w http.ResponseWriter, r *http.Request) {
-		var rawUrl Url
+		var rawUrl ShortenRequest
 
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
